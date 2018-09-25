@@ -1,0 +1,21 @@
+version: 2
+jobs:
+  build:
+    docker:
+    - image: circleci/golang
+    working_directory: /go/src/github.com/jakubkulhan/ingress-merge
+    steps:
+    - checkout
+    - setup_remote_docker
+    - run:
+        command: |
+          docker build -t jakubkulhan/ingress-merge:latest .
+          if [ "$CIRCLE_BRANCH" == "master" ]; then
+            docker login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD
+            docker push jakubkulhan/ingress-merge:latest
+          fi
+workflows:
+  version: 2
+  wf:
+    jobs:
+    - build

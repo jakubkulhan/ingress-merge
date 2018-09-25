@@ -1,0 +1,18 @@
+ingressClass: merge
+
+rbac:
+  create: true
+  serviceAccountName: default
+
+image:
+  repository: jakubkulhan/ingress-merge
+  tag: latest
+  pullPolicy: Always
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
