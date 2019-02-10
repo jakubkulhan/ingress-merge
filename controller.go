@@ -13,7 +13,7 @@ import (
 	"k8s.io/api/core/v1"
 	extensionsV1beta1 "k8s.io/api/extensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,9 +34,13 @@ const (
 )
 
 type Controller struct {
-	MasterURL      string
-	KubeconfigPath string
-	IngressClass   string
+	MasterURL          string
+	KubeconfigPath     string
+	IngressClass       string
+	IngressSelector    string
+	ConfigMapSelector  string
+	IngressBlacklist   []string
+	ConfigMapBlacklist []string
 
 	client             *kubernetes.Clientset
 	ingressesIndex     cache.Indexer
@@ -68,8 +72,17 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	if _, err = labels.Parse(c.IngressSelector) ; err != nil {
+		return fmt.Errorf("Invalid Ingress selector - %s", err)
+	}
+
 	c.ingressesIndex, c.ingressesInformer = cache.NewIndexerInformer(
-		cache.NewListWatchFromClient(c.client.ExtensionsV1beta1().RESTClient(), "ingresses", "", fields.Everything()),
+		cache.NewFilteredListWatchFromClient(c.client.ExtensionsV1beta1().RESTClient(), "ingresses", "",
+		func(options *metaV1.ListOptions) {
+			options.LabelSelector = c.IngressSelector
+			duration := int64(1<<31-1)
+			options.TimeoutSeconds = &duration
+		}),
 		&extensionsV1beta1.Ingress{},
 		0,
 		c,
@@ -78,8 +91,18 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 
 	go c.ingressesInformer.Run(childCtx.Done())
 
+	if _, err = labels.Parse(c.ConfigMapSelector) ; err != nil {
+		return fmt.Errorf("Invalid ConfigMap selector - %s", err)
+	}
+
+
 	c.configMapsIndex, c.configMapsInformer = cache.NewIndexerInformer(
-		cache.NewListWatchFromClient(c.client.CoreV1().RESTClient(), "configmaps", "", fields.Everything()),
+		cache.NewFilteredListWatchFromClient(c.client.CoreV1().RESTClient(), "configmaps", "",
+		func(options *metaV1.ListOptions) {
+			options.LabelSelector = c.ConfigMapSelector
+			duration := int64(1<<31-1)
+			options.TimeoutSeconds = &duration
+		}),
 		&v1.ConfigMap{},
 		0,
 		c,
@@ -113,16 +136,42 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 	}
 }
 
+func (c *Controller) checkBlacklist(obj interface{}) bool {
+
+	switch object := obj.(type) {
+		case *extensionsV1beta1.Ingress:
+			for _, val := range c.IngressBlacklist {
+				if _, exists := object.Annotations[val] ; exists { return true }
+			}
+		case *v1.ConfigMap:
+			for _, val := range c.ConfigMapBlacklist {
+				if _, exists := object.Annotations[val] ; exists { return true }
+			}
+		default:
+			return false
+	}
+	return false
+}
+
 func (c *Controller) OnAdd(obj interface{}) {
-	c.wakeUp()
+	if ! c.checkBlacklist(obj) {
+		glog.Infof("Watched resource added")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) OnUpdate(oldObj, newObj interface{}) {
-	c.wakeUp()
+	if ! c.checkBlacklist(oldObj) && ! c.checkBlacklist(newObj)  {
+		glog.Infof("Watched resource updated")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) OnDelete(obj interface{}) {
-	c.wakeUp()
+	if ! c.checkBlacklist(obj) {
+		glog.Infof("Watched resource deleted")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) wakeUp() {

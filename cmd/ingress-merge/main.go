@@ -35,6 +35,22 @@ func main() {
 				return err
 			}
 
+			if controller.IngressSelector, err = cmd.Flags().GetString("ingress-selector"); err != nil {
+				return err
+			}
+
+			if controller.ConfigMapSelector, err = cmd.Flags().GetString("configmap-selector"); err != nil {
+				return err
+			}
+
+			if controller.IngressBlacklist, err = cmd.Flags().GetStringArray("ingress-blacklist"); err != nil {
+				return err
+			}
+
+			if controller.ConfigMapBlacklist, err = cmd.Flags().GetStringArray("configmap-blacklist"); err != nil {
+				return err
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			interrupts := make(chan os.Signal, 1)
 			go func() {
@@ -70,6 +86,30 @@ func main() {
 		"ingress-class",
 		"merge",
 		"Process ingress resources with this `kubernetes.io/ingress.class` annotation.",
+	)
+
+	rootCmd.Flags().String(
+		"ingress-selector",
+		"",
+		"Process ingress resources with labels matching this selector string.",
+	)
+
+	rootCmd.Flags().String(
+		"configmap-selector",
+		"",
+		"Process configmap resources with labels matching this selector string.",
+	)
+
+	rootCmd.Flags().StringArray(
+		"ingress-blacklist",
+		[]string{},
+		"Ignore ingress resources with matching annotations (can be specified multiple times).",
+	)
+
+	rootCmd.Flags().StringArray(
+		"configmap-blacklist",
+		[]string{},
+		"Ignore configmap resources with matching annotations (can be specified multiple times).",
 	)
 
 	if err := rootCmd.Execute(); err != nil {
