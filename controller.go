@@ -177,7 +177,7 @@ func (c *Controller) OnAdd(obj interface{}) {
 }
 
 func (c *Controller) OnUpdate(oldObj, newObj interface{}) {
-	if ! c.checkBlacklist(oldObj) && ! c.checkBlacklist(newObj)  {
+	if !(c.checkBlacklist(oldObj) && c.checkBlacklist(newObj)) {
 		glog.Infof("Watched resource updated")
 		c.wakeUp()
 	}
