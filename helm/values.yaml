@@ -1,4 +1,8 @@
 ingressClass: merge
+configmapSelector: ""
+ingressSelector: ""
+configmapBlacklist: []
+ingressBlacklist: []
 
 rbac:
   create: true

@@ -29,6 +29,14 @@ spec:
           args:
             - --logtostderr
             - --ingress-class={{ .Values.ingressClass }}
+            {{- if .Values.configmapSelector }}
+            - --configmap-selector={{ .Values.configmapSelector }}{{ end }}
+            {{- if .Values.ingressSelector }}
+            - --ingress-selector={{ .Values.ingressSelector }}{{ end }}
+            {{- range .Values.configmapBlacklist }}
+            - --configmap-blacklist={{ . }}{{ end }}
+            {{- range .Values.ingressBlacklist }}
+            - --ingress-blacklist={{ . }}{{ end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
     {{- with .Values.nodeSelector }}
