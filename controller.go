@@ -116,6 +116,22 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 		return fmt.Errorf("could not sync cache")
 	}
 
+	if c.IngressSelector != "" {
+	glog.Infof("Watching Ingress objects matching the following label selector: %v", c.IngressSelector)
+	}
+
+	if c.ConfigMapSelector != "" {
+	glog.Infof("Watching ConfigMap objects matching the following label selector: %v", c.ConfigMapSelector)
+	}
+
+	if len(c.IngressBlacklist) > 0 {
+	glog.Infof("Ignoring Ingress objects with the following annotations: %v", c.IngressBlacklist)
+	}
+
+	if len(c.ConfigMapBlacklist) > 0 {
+	glog.Infof("Ignoring ConfigMap objects with the following annotations: %v", c.ConfigMapBlacklist)
+	}
+
 	c.wakeCh = make(chan struct{}, 1)
 
 	c.Process(childCtx)
