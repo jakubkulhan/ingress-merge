@@ -43,11 +43,11 @@ func main() {
 				return err
 			}
 
-			if controller.IngressBlacklist, err = cmd.Flags().GetStringArray("ingress-blacklist"); err != nil {
+			if controller.IngressWatchIgnore, err = cmd.Flags().GetStringArray("ingress-watch-ignore"); err != nil {
 				return err
 			}
 
-			if controller.ConfigMapBlacklist, err = cmd.Flags().GetStringArray("configmap-blacklist"); err != nil {
+			if controller.ConfigMapWatchIgnore, err = cmd.Flags().GetStringArray("configmap-watch-ignore"); err != nil {
 				return err
 			}
 
@@ -101,13 +101,13 @@ func main() {
 	)
 
 	rootCmd.Flags().StringArray(
-		"ingress-blacklist",
+		"ingress-watch-ignore",
 		[]string{},
 		"Ignore ingress resources with matching annotations (can be specified multiple times).",
 	)
 
 	rootCmd.Flags().StringArray(
-		"configmap-blacklist",
+		"configmap-watch-ignore",
 		[]string{},
 		"Ignore configmap resources with matching annotations (can be specified multiple times).",
 	)
