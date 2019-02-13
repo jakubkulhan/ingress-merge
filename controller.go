@@ -3,6 +3,7 @@ package ingress_merge
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -10,10 +11,11 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"k8s.io/api/core/v1"
 	extensionsV1beta1 "k8s.io/api/extensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,9 +36,13 @@ const (
 )
 
 type Controller struct {
-	MasterURL      string
-	KubeconfigPath string
-	IngressClass   string
+	MasterURL            string
+	KubeconfigPath       string
+	IngressClass         string
+	IngressSelector      string
+	ConfigMapSelector    string
+	IngressWatchIgnore   []string
+	ConfigMapWatchIgnore []string
 
 	client             *kubernetes.Clientset
 	ingressesIndex     cache.Indexer
@@ -68,8 +74,20 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	if _, err = labels.Parse(c.IngressSelector); err != nil {
+		return errors.Wrap(err, "Invalid Ingress selector")
+	}
+
 	c.ingressesIndex, c.ingressesInformer = cache.NewIndexerInformer(
-		cache.NewListWatchFromClient(c.client.ExtensionsV1beta1().RESTClient(), "ingresses", "", fields.Everything()),
+		cache.NewFilteredListWatchFromClient(
+			c.client.ExtensionsV1beta1().RESTClient(),
+			"ingresses",
+			"",
+			func(options *metaV1.ListOptions) {
+				options.LabelSelector = c.IngressSelector
+				duration := int64(math.MaxInt32)
+				options.TimeoutSeconds = &duration
+			}),
 		&extensionsV1beta1.Ingress{},
 		0,
 		c,
@@ -78,8 +96,20 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 
 	go c.ingressesInformer.Run(childCtx.Done())
 
+	if _, err = labels.Parse(c.ConfigMapSelector); err != nil {
+		return errors.Wrap(err, "Invalid ConfigMap selector")
+	}
+
 	c.configMapsIndex, c.configMapsInformer = cache.NewIndexerInformer(
-		cache.NewListWatchFromClient(c.client.CoreV1().RESTClient(), "configmaps", "", fields.Everything()),
+		cache.NewFilteredListWatchFromClient(
+			c.client.CoreV1().RESTClient(),
+			"configmaps",
+			"",
+			func(options *metaV1.ListOptions) {
+				options.LabelSelector = c.ConfigMapSelector
+				duration := int64(math.MaxInt32)
+				options.TimeoutSeconds = &duration
+			}),
 		&v1.ConfigMap{},
 		0,
 		c,
@@ -91,6 +121,22 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 	glog.Infoln("Waiting for caches to sync")
 	if !cache.WaitForCacheSync(childCtx.Done(), c.ingressesInformer.HasSynced, c.configMapsInformer.HasSynced) {
 		return fmt.Errorf("could not sync cache")
+	}
+
+	if c.IngressSelector != "" {
+		glog.Infof("Watching Ingress objects matching the following label selector: %v", c.IngressSelector)
+	}
+
+	if c.ConfigMapSelector != "" {
+		glog.Infof("Watching ConfigMap objects matching the following label selector: %v", c.ConfigMapSelector)
+	}
+
+	if len(c.IngressWatchIgnore) > 0 {
+		glog.Infof("Ignoring Ingress objects with the following annotations: %v", c.IngressWatchIgnore)
+	}
+
+	if len(c.ConfigMapWatchIgnore) > 0 {
+		glog.Infof("Ignoring ConfigMap objects with the following annotations: %v", c.ConfigMapWatchIgnore)
 	}
 
 	c.wakeCh = make(chan struct{}, 1)
@@ -113,16 +159,46 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 	}
 }
 
+func (c *Controller) isIgnored(obj interface{}) bool {
+
+	switch object := obj.(type) {
+	case *extensionsV1beta1.Ingress:
+		for _, val := range c.IngressWatchIgnore {
+			if _, exists := object.Annotations[val]; exists {
+				return true
+			}
+		}
+	case *v1.ConfigMap:
+		for _, val := range c.ConfigMapWatchIgnore {
+			if _, exists := object.Annotations[val]; exists {
+				return true
+			}
+		}
+	default:
+		return false
+	}
+	return false
+}
+
 func (c *Controller) OnAdd(obj interface{}) {
-	c.wakeUp()
+	if !c.isIgnored(obj) {
+		glog.Infof("Watched resource added")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) OnUpdate(oldObj, newObj interface{}) {
-	c.wakeUp()
+	if !c.isIgnored(oldObj) || !c.isIgnored(newObj) {
+		glog.Infof("Watched resource updated")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) OnDelete(obj interface{}) {
-	c.wakeUp()
+	if !c.isIgnored(obj) {
+		glog.Infof("Watched resource deleted")
+		c.wakeUp()
+	}
 }
 
 func (c *Controller) wakeUp() {

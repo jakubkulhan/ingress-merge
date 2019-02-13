@@ -35,6 +35,22 @@ func main() {
 				return err
 			}
 
+			if controller.IngressSelector, err = cmd.Flags().GetString("ingress-selector"); err != nil {
+				return err
+			}
+
+			if controller.ConfigMapSelector, err = cmd.Flags().GetString("configmap-selector"); err != nil {
+				return err
+			}
+
+			if controller.IngressWatchIgnore, err = cmd.Flags().GetStringArray("ingress-watch-ignore"); err != nil {
+				return err
+			}
+
+			if controller.ConfigMapWatchIgnore, err = cmd.Flags().GetStringArray("configmap-watch-ignore"); err != nil {
+				return err
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			interrupts := make(chan os.Signal, 1)
 			go func() {
@@ -70,6 +86,30 @@ func main() {
 		"ingress-class",
 		"merge",
 		"Process ingress resources with this `kubernetes.io/ingress.class` annotation.",
+	)
+
+	rootCmd.Flags().String(
+		"ingress-selector",
+		"",
+		"Process ingress resources with labels matching this selector string.",
+	)
+
+	rootCmd.Flags().String(
+		"configmap-selector",
+		"",
+		"Process configmap resources with labels matching this selector string.",
+	)
+
+	rootCmd.Flags().StringArray(
+		"ingress-watch-ignore",
+		[]string{},
+		"Ignore ingress resources with matching annotations (can be specified multiple times).",
+	)
+
+	rootCmd.Flags().StringArray(
+		"configmap-watch-ignore",
+		[]string{},
+		"Ignore configmap resources with matching annotations (can be specified multiple times).",
 	)
 
 	if err := rootCmd.Execute(); err != nil {
