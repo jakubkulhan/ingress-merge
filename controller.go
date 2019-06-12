@@ -12,6 +12,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/ulule/deepcopier"
 	"k8s.io/api/core/v1"
 	extensionsV1beta1 "k8s.io/api/extensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -213,6 +214,7 @@ func (c *Controller) Process(ctx context.Context) {
 
 	var (
 		mergeMap = make(map[*v1.ConfigMap][]*extensionsV1beta1.Ingress)
+		cacheMap = make(map[string]*v1.ConfigMap)
 		orphaned = make(map[string]*extensionsV1beta1.Ingress)
 	)
 
@@ -255,7 +257,6 @@ func (c *Controller) Process(ctx context.Context) {
 		}
 
 		configMapIface, exists, _ := c.configMapsIndex.GetByKey(ingress.Namespace + "/" + configMapName)
-		var configMap *v1.ConfigMap
 		if !exists {
 			// TODO: emit error event on ingress that config map does not exist
 			//glog.Infof(
@@ -275,8 +276,16 @@ func (c *Controller) Process(ctx context.Context) {
 					c.DefaultNamespaceCm,
 					configMapName,
 				)
-				configMap = configMapIfaceOther.(*v1.ConfigMap)
-				configMap.SetNamespace(ingress.Namespace)
+				configMap := configMapIfaceOther.(*v1.ConfigMap)
+				if copyCm, ok := cacheMap[ingress.Namespace]; ok {
+					mergeMap[copyCm] = append(mergeMap[copyCm], ingress)
+				} else {
+					copyCm := &v1.ConfigMap{}
+					_ = deepcopier.Copy(configMap).To(copyCm)
+					copyCm.SetNamespace(ingress.Namespace)
+					cacheMap[ingress.Namespace] = copyCm
+					mergeMap[copyCm] = append(mergeMap[copyCm], ingress)
+				}
 			} else {
 				glog.Errorf("Ingress [%s/%s] can't created, default ConfigMap [%s/%s] not found",
 					ingress.Namespace,
@@ -287,7 +296,7 @@ func (c *Controller) Process(ctx context.Context) {
 				continue
 			}
 		} else {
-			configMap = configMapIface.(*v1.ConfigMap)
+			configMap := configMapIface.(*v1.ConfigMap)
 			glog.Infof(
 				"Ingress [%s/%s] ConfigMap [%s/%s] is used",
 				ingress.Namespace,
@@ -295,8 +304,8 @@ func (c *Controller) Process(ctx context.Context) {
 				configMap.Namespace,
 				configMapName,
 			)
+			mergeMap[configMap] = append(mergeMap[configMap], ingress)
 		}
-		mergeMap[configMap] = append(mergeMap[configMap], ingress)
 	}
 
 	glog.Infof("Collected %d ingresses to be merged", len(mergeMap))
