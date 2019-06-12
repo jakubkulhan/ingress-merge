@@ -29,6 +29,7 @@ spec:
           args:
             - --logtostderr
             - --ingress-class={{ .Values.ingressClass }}
+            - --configmap-default-ns={{ .Release.Namespace }}
             {{- if .Values.configMapSelector }}
             - --configmap-selector={{ .Values.configMapSelector }}{{ end }}
             {{- if .Values.ingressSelector }}
