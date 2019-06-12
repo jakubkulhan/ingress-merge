@@ -41,6 +41,7 @@ type Controller struct {
 	IngressClass         string
 	IngressSelector      string
 	ConfigMapSelector    string
+	DefaultNamespaceCm   string
 	IngressWatchIgnore   []string
 	ConfigMapWatchIgnore []string
 
@@ -244,29 +245,57 @@ func (c *Controller) Process(ctx context.Context) {
 		configMapName, exists := ingress.Annotations[ConfigAnnotation]
 		if !exists {
 			// TODO: emit error event on ingress that no config map name is set
-			glog.Errorf(
-				"Ingress [%s/%s] is missing [%s] annotation",
-				ingress.Namespace,
-				ingress.Name,
-				ConfigAnnotation,
-			)
-			continue
+			//glog.Infof(
+			//	"Ingress [%s/%s] is missing [%s] annotation, looking for default map ingress-merge",
+			//	ingress.Namespace,
+			//	ingress.Name,
+			//	ConfigAnnotation,
+			//)
+			configMapName = "ingress-merge"
 		}
 
 		configMapIface, exists, _ := c.configMapsIndex.GetByKey(ingress.Namespace + "/" + configMapName)
+		var configMap *v1.ConfigMap
 		if !exists {
 			// TODO: emit error event on ingress that config map does not exist
-			glog.Errorf(
-				"Ingress [%s/%s] needs ConfigMap [%s/%s], however it does not exist",
+			//glog.Infof(
+			//	"Ingress [%s/%s] ovveride ConfigMap [%s/%s] does not exist, skipping",
+			//	ingress.Namespace,
+			//	ingress.Name,
+			//	ingress.Namespace,
+			//	configMapName,
+			//)
+
+			configMapIfaceOther, exists, _ := c.configMapsIndex.GetByKey(c.DefaultNamespaceCm + "/" + configMapName)
+			if exists {
+				glog.Infof(
+					"Ingress [%s/%s] default ConfigMap [%s/%s] is used",
+					ingress.Namespace,
+					ingress.Name,
+					c.DefaultNamespaceCm,
+					configMapName,
+				)
+				configMap = configMapIfaceOther.(*v1.ConfigMap)
+				configMap.SetNamespace(ingress.Namespace)
+			} else {
+				glog.Errorf("Ingress [%s/%s] can't created, default ConfigMap [%s/%s] not found",
+					ingress.Namespace,
+					ingress.Name,
+					c.DefaultNamespaceCm,
+					configMapName,
+				)
+				continue
+			}
+		} else {
+			configMap = configMapIface.(*v1.ConfigMap)
+			glog.Infof(
+				"Ingress [%s/%s] ConfigMap [%s/%s] is used",
 				ingress.Namespace,
 				ingress.Name,
-				ingress.Namespace,
+				configMap.Namespace,
 				configMapName,
 			)
-			continue
 		}
-
-		configMap := configMapIface.(*v1.ConfigMap)
 		mergeMap[configMap] = append(mergeMap[configMap], ingress)
 	}
 

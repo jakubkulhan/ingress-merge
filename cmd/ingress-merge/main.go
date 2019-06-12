@@ -51,6 +51,9 @@ func main() {
 				return err
 			}
 
+			if controller.DefaultNamespaceCm, err = cmd.Flags().GetString("configmap-default-ns"); err != nil {
+				return err
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			interrupts := make(chan os.Signal, 1)
 			go func() {
@@ -110,6 +113,12 @@ func main() {
 		"configmap-watch-ignore",
 		[]string{},
 		"Ignore configmap resources with matching annotations (can be specified multiple times).",
+	)
+
+	rootCmd.Flags().String(
+		"configmap-default-ns",
+		"",
+		"Default namespace to read configmap",
 	)
 
 	if err := rootCmd.Execute(); err != nil {
