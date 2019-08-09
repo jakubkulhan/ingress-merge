@@ -12,7 +12,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	extensionsV1beta1 "k8s.io/api/extensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -377,11 +377,9 @@ func (c *Controller) Process(ctx context.Context) {
 		}
 		annotations[ResultAnnotation] = "true"
 
-		if dataBackend, exists := configMap.Data[BackendConfigKey]; exists {
-			if err := yaml.Unmarshal([]byte(dataBackend), &backend); err != nil {
-				backend = nil
-				glog.Errorf("Could not unmarshal [%s] from config [%s/%s]: %v", BackendConfigKey, configMap.Namespace, configMap.Name, err)
-			}
+		backend, err := getDefaultBackend(configMap, ingresses)
+		if err != nil {
+			glog.Errorf(err.Error())
 		}
 
 		mergedIngres := &extensionsV1beta1.Ingress{
@@ -495,4 +493,31 @@ func hasIngressChanged(old, new *extensionsV1beta1.Ingress) bool {
 	}
 
 	return false
+}
+
+func getDefaultBackend(configMap *v1.ConfigMap, ingresses []*extensionsV1beta1.Ingress) (*extensionsV1beta1.IngressBackend, error) {
+	var backend *extensionsV1beta1.IngressBackend
+
+	for _, i := range ingresses {
+		if i.Spec.Backend != nil {
+			if backend != nil {
+				return nil, fmt.Errorf("default backend detected in multiple Ingress resources for config [%s/%s]", configMap.Namespace, configMap.Name)
+			}
+
+			backend = i.Spec.Backend
+		}
+	}
+
+	dataBackend, exists := configMap.Data[BackendConfigKey]
+	if exists {
+		if backend != nil {
+			return nil, fmt.Errorf("multiple default backends detected in Ingress and in ConfigMap for config [%s/%s]", configMap.Namespace, configMap.Name)
+		}
+
+		if err := yaml.Unmarshal([]byte(dataBackend), &backend); err != nil {
+			return nil, fmt.Errorf("Could not unmarshal [%s] from config [%s/%s]: %v", BackendConfigKey, configMap.Namespace, configMap.Name, err)
+		}
+	}
+
+	return backend, nil
 }
