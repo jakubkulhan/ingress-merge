@@ -1,0 +1,59 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: merged-ingress
+  namespace: default
+data:
+  annotations: |
+    kubernetes.io/ingress.class: alb
+  backend: |
+    serviceName: cm
+    servicePort: 80
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: src-first
+  labels:
+    app: app
+  annotations:
+    kubernetes.io/ingress.class: merge
+    merge.ingress.kubernetes.io/config: merged-ingress
+spec:
+  rules:
+    - host: first.example.com
+      http:
+        paths:
+          - path: /*
+            backend:
+              serviceName: first
+              servicePort: 80
+  # backend:
+  #   serviceName: ing
+  #   servicePort: 80
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: src-second
+  labels:
+    app: app
+  annotations:
+    kubernetes.io/ingress.class: merge
+    merge.ingress.kubernetes.io/config: merged-ingress
+spec:
+  rules:
+    - host: second.example.com
+      http:
+        paths:
+          - path: /*
+            backend:
+              serviceName: second
+              servicePort: 80
+  # backend:
+  #   serviceName: invalid-ing
+  #   servicePort: 80
