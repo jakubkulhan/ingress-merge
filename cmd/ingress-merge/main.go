@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
-	ingress_merge "github.com/ponomarevkonst/ingress-merge"
+	ingress_merge "github.com/jakubkulhan/ingress-merge"
 	"github.com/spf13/cobra"
 )
 

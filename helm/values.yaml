@@ -20,8 +20,8 @@ rbac:
   serviceAccountName: default
 
 image:
-  repository: ponomarevkonst/public
-  tag: ingress-merge
+  repository: jakubkulhan/ingress-merge
+  tag: latest 
   pullPolicy: Always
 
 resources: {}
