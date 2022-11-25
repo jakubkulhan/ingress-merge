@@ -12,8 +12,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"k8s.io/api/core/v1"
-	extensionsV1beta1 "k8s.io/api/extensions/v1beta1"
+	v1 "k8s.io/api/core/v1"
+	networkingV1 "k8s.io/api/networking/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -80,7 +80,7 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 
 	c.ingressesIndex, c.ingressesInformer = cache.NewIndexerInformer(
 		cache.NewFilteredListWatchFromClient(
-			c.client.ExtensionsV1beta1().RESTClient(),
+			c.client.NetworkingV1().RESTClient(),
 			"ingresses",
 			"",
 			func(options *metaV1.ListOptions) {
@@ -88,7 +88,7 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 				duration := int64(math.MaxInt32)
 				options.TimeoutSeconds = &duration
 			}),
-		&extensionsV1beta1.Ingress{},
+		&networkingV1.Ingress{},
 		0,
 		c,
 		cache.Indexers{},
@@ -162,7 +162,7 @@ func (c *Controller) Run(ctx context.Context) (err error) {
 func (c *Controller) isIgnored(obj interface{}) bool {
 
 	switch object := obj.(type) {
-	case *extensionsV1beta1.Ingress:
+	case *networkingV1.Ingress:
 		for _, val := range c.IngressWatchIgnore {
 			if _, exists := object.Annotations[val]; exists {
 				return true
@@ -211,12 +211,12 @@ func (c *Controller) Process(ctx context.Context) {
 	glog.Infof("Processing ingress resources")
 
 	var (
-		mergeMap = make(map[*v1.ConfigMap][]*extensionsV1beta1.Ingress)
-		orphaned = make(map[string]*extensionsV1beta1.Ingress)
+		mergeMap = make(map[*v1.ConfigMap][]*networkingV1.Ingress)
+		orphaned = make(map[string]*networkingV1.Ingress)
 	)
 
 	for _, ingressIface := range c.ingressesIndex.List() {
-		ingress := ingressIface.(*extensionsV1beta1.Ingress)
+		ingress := ingressIface.(*networkingV1.Ingress)
 
 		ingressClass := ingress.Annotations[IngressClassAnnotation]
 		if ingressClass != c.IngressClass {
@@ -302,13 +302,13 @@ func (c *Controller) Process(ctx context.Context) {
 
 		var (
 			ownerReferences []metaV1.OwnerReference
-			tls             []extensionsV1beta1.IngressTLS
-			rules           []extensionsV1beta1.IngressRule
+			tls             []networkingV1.IngressTLS
+			rules           []networkingV1.IngressRule
 		)
 
 		for _, ingress := range ingresses {
 			ownerReferences = append(ownerReferences, metaV1.OwnerReference{
-				APIVersion: "extensions/v1beta1",
+				APIVersion: "networking.k8s.io/v1",
 				Kind:       "Ingress",
 				Name:       ingress.Name,
 				UID:        ingress.UID,
@@ -338,7 +338,7 @@ func (c *Controller) Process(ctx context.Context) {
 			name        string
 			labels      map[string]string
 			annotations map[string]string
-			backend     *extensionsV1beta1.IngressBackend
+			backend     *networkingV1.IngressBackend
 		)
 
 		if dataName, exists := configMap.Data[NameConfigKey]; exists {
@@ -384,7 +384,7 @@ func (c *Controller) Process(ctx context.Context) {
 			}
 		}
 
-		mergedIngres := &extensionsV1beta1.Ingress{
+		mergedIngres := &networkingV1.Ingress{
 			ObjectMeta: metaV1.ObjectMeta{
 				Namespace:       configMap.Namespace,
 				Name:            name,
@@ -392,19 +392,19 @@ func (c *Controller) Process(ctx context.Context) {
 				Annotations:     annotations,
 				OwnerReferences: ownerReferences,
 			},
-			Spec: extensionsV1beta1.IngressSpec{
-				Backend: backend,
-				TLS:     tls,
-				Rules:   rules,
+			Spec: networkingV1.IngressSpec{
+				DefaultBackend: backend,
+				TLS:            tls,
+				Rules:          rules,
 			},
 		}
 
 		if existingMergedIngressIface, exists, _ := c.ingressesIndex.Get(mergedIngres); exists {
-			existingMergedIngress := existingMergedIngressIface.(*extensionsV1beta1.Ingress)
+			existingMergedIngress := existingMergedIngressIface.(*networkingV1.Ingress)
 
 			if hasIngressChanged(existingMergedIngress, mergedIngres) {
 				changed = true
-				ret, err := c.client.ExtensionsV1beta1().Ingresses(mergedIngres.Namespace).Update(mergedIngres)
+				ret, err := c.client.NetworkingV1().Ingresses(mergedIngres.Namespace).Update(ctx, mergedIngres, metaV1.UpdateOptions{})
 				if err != nil {
 					glog.Errorf("Could not update ingress [%s/%s]: %v", mergedIngres.Namespace, mergedIngres.Name, err)
 					continue
@@ -417,7 +417,7 @@ func (c *Controller) Process(ctx context.Context) {
 
 		} else {
 			changed = true
-			ret, err := c.client.ExtensionsV1beta1().Ingresses(mergedIngres.Namespace).Create(mergedIngres)
+			ret, err := c.client.NetworkingV1().Ingresses(mergedIngres.Namespace).Create(ctx, mergedIngres, metaV1.CreateOptions{})
 			if err != nil {
 				glog.Errorf("Could not create ingress [%s/%s]: %v", mergedIngres.Namespace, mergedIngres.Name, err)
 				continue
@@ -437,7 +437,7 @@ func (c *Controller) Process(ctx context.Context) {
 			mergedIngres.Status.DeepCopyInto(&ingress.Status)
 
 			changed = true
-			ret, err := c.client.ExtensionsV1beta1().Ingresses(ingress.Namespace).UpdateStatus(ingress)
+			ret, err := c.client.NetworkingV1().Ingresses(ingress.Namespace).UpdateStatus(ctx, ingress, metaV1.UpdateOptions{})
 			if err != nil {
 				glog.Errorf("Could not update status of ingress [%s/%s]: %v", ingress.Namespace, ingress.Name, err)
 				continue
@@ -458,7 +458,7 @@ func (c *Controller) Process(ctx context.Context) {
 
 	for _, ingress := range orphaned {
 		changed = true
-		err := c.client.ExtensionsV1beta1().Ingresses(ingress.Namespace).Delete(ingress.Name, nil)
+		err := c.client.NetworkingV1().Ingresses(ingress.Namespace).Delete(ctx, ingress.Name, metaV1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("Could not delete ingress [%s/%s]: %v", ingress.Namespace, ingress.Name, err)
 			continue
@@ -474,7 +474,7 @@ func (c *Controller) Process(ctx context.Context) {
 	}
 }
 
-func hasIngressChanged(old, new *extensionsV1beta1.Ingress) bool {
+func hasIngressChanged(old, new *networkingV1.Ingress) bool {
 	if new.Namespace != old.Namespace {
 		return true
 	}
