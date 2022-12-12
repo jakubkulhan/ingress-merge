@@ -1,4 +1,4 @@
-module github.com/jakubkulhan/ingress-merge
+module github.com/ponomarevkonst/ingress-merge
 
 go 1.19
 

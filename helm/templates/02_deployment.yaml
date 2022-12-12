@@ -26,6 +26,12 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{ if .Values.image.pullSecrets }} 
+          imagePullSecrets:
+          {{- range .Values.image.pullSecrets }}
+            - name: {{ . }}
+          {{- end }}
+          {{ end }}
           args:
             - --logtostderr
             - --ingress-class={{ .Values.ingressClass }}
