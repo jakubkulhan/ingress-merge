@@ -2,6 +2,8 @@ module github.com/ponomarevkonst/ingress-merge
 
 go 1.19
 
+go 1.19
+
 require (
 	github.com/ghodss/yaml v1.0.0
 	k8s.io/apimachinery v0.25.4

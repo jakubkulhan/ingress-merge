@@ -22,7 +22,7 @@ resource that will be managed by different controller.
 Install via [Helm](https://www.helm.sh/):
 
 ```sh
-helm install --namespace kube-system --name ingress-merge ./helm
+helm install --namespace kube-system ingress-merge ./helm
 ```
 
 ## Example
