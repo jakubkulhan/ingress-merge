@@ -84,7 +84,7 @@ data:
 Merge Ingress Controller will create new ingress resource named by the config map with rules combined together:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: merged-ingress

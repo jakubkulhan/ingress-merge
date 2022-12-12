@@ -20,9 +20,11 @@ rbac:
   serviceAccountName: default
 
 image:
-  repository: jakubkulhan/ingress-merge
-  tag: latest
+  repository: ponomarevkonst/ingress-merge
+  tag: arm64
   pullPolicy: Always
+  pullSecrets:
+    - name: regcred
 
 resources: {}
 
