@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "ingress-merge.fullname" . }}
@@ -22,6 +22,12 @@ spec:
         release: {{ .Release.Name }}
     spec:
       serviceAccountName: {{ if .Values.rbac.create }}{{ include "ingress-merge.fullname" . }}{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}
+      {{ if .Values.image.pullSecrets }} 
+      imagePullSecrets:
+      {{- range .Values.image.pullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{ end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

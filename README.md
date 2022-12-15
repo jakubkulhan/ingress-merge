@@ -22,7 +22,7 @@ resource that will be managed by different controller.
 Install via [Helm](https://www.helm.sh/):
 
 ```sh
-helm install --namespace kube-system --name ingress-merge ./helm
+helm install --namespace kube-system ingress-merge ./helm
 ```
 
 ## Example
@@ -30,7 +30,7 @@ helm install --namespace kube-system --name ingress-merge ./helm
 Create multiple ingresses & one config map that will provide parameters for the result ingress:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: foo-ingress
@@ -43,12 +43,15 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: foo-svc
-          servicePort: 80
+          service:
+            name: foo-svc
+            port: 
+              number: 80
 
 ---
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: bar-ingress
@@ -61,9 +64,12 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: bar-svc
-          servicePort: 80
+          service:
+            name: bar-svc
+            port: 
+              number: 80
 
 ---
 apiVersion: v1
@@ -78,7 +84,7 @@ data:
 Merge Ingress Controller will create new ingress resource named by the config map with rules combined together:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: merged-ingress
@@ -91,16 +97,20 @@ spec:
       paths:
       - path: /
         backend:
-          serviceName: bar-svc
-          servicePort: 80
+          service:
+            name: bar-svc
+            port:
+              number: 80
 
   - host: foo.example.com
     http:
       paths:
       - path: /
         backend:
-          serviceName: foo-svc
-          servicePort: 80
+          service:
+            name: foo-svc
+            port:
+              number: 80
 ```
 
 ## Annotations
